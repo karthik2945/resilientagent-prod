@@ -108,41 +108,7 @@ def get_llm_action(task_id: str, obs, history: list[dict]) -> dict:
 
     except Exception as e:
         logger.error(f"LLM call failed: {e}")
-        # Deterministic fallback based on task + step so we don't loop
-        return _fallback_action(task_id, len(history))
-
-
-# ---------------------------------------------------------------------------
-# Deterministic fallback (used only when the LLM API is unreachable)
-# ---------------------------------------------------------------------------
-FALLBACK_SEQUENCES = {
-    "task1_latency_spike": [
-        ("check_metrics", "inference_service"),
-        ("read_logs",     "inference_service"),
-        ("optimize_batch","inference_service"),
-        ("verify_fix",    "inference_service"),
-    ],
-    "task2_prediction_drift": [
-        ("analyze_drift",    "ml_model"),
-        ("check_deployment", "ml_model"),
-        ("rollback_model",   "ml_model"),
-        ("verify_fix",       "ml_model"),
-    ],
-    "task3_cascading_failure": [
-        ("check_metrics",   "primary_model"),
-        ("read_logs",       "primary_model"),
-        ("restart_service", "primary_model"),
-        ("scale_service",   "fallback_model"),
-        ("verify_fix",      "primary_model"),
-    ],
-}
-
-
-def _fallback_action(task_id: str, step: int) -> dict:
-    seq = FALLBACK_SEQUENCES.get(task_id, FALLBACK_SEQUENCES["task1_latency_spike"])
-    idx = min(step, len(seq) - 1)
-    return {"action_type": seq[idx][0], "target": seq[idx][1]}
-
+        return {"action_type": "notify_team", "target": "inference_service"}
 
 # ---------------------------------------------------------------------------
 # Main inference loop

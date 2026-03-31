@@ -194,29 +194,6 @@ inference_service, ml_model, primary_model, fallback_model
    No markdown fences, no extra text.
 """
 
-FALLBACK_SEQUENCES = {
-    "task1_latency_spike": [
-        ("check_metrics", "inference_service"),
-        ("read_logs",     "inference_service"),
-        ("optimize_batch","inference_service"),
-        ("verify_fix",    "inference_service"),
-    ],
-    "task2_prediction_drift": [
-        ("analyze_drift",    "ml_model"),
-        ("check_deployment", "ml_model"),
-        ("rollback_model",   "ml_model"),
-        ("verify_fix",       "ml_model"),
-    ],
-    "task3_cascading_failure": [
-        ("check_metrics",   "primary_model"),
-        ("read_logs",       "primary_model"),
-        ("restart_service", "primary_model"),
-        ("scale_service",   "fallback_model"),
-        ("verify_fix",      "primary_model"),
-    ],
-}
-
-
 def _get_llm_client():
     """Lazily create the OpenAI client."""
     import openai
@@ -257,9 +234,8 @@ def _ask_llm(client, model, task_id, obs, history):
         return json.loads(reply)
     except Exception as e:
         logger.error(f"LLM call failed: {e}")
-        seq = FALLBACK_SEQUENCES.get(task_id, FALLBACK_SEQUENCES["task1_latency_spike"])
-        idx = min(len(history), len(seq) - 1)
-        return {"action_type": seq[idx][0], "target": seq[idx][1]}
+        # If the LLM genuinely fails, don't fake it. Just take a safe default action.
+        return {"action_type": "notify_team", "target": "inference_service"}
 
 
 @app.get("/llm-inference")
