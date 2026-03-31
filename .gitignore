@@ -1,0 +1,21 @@
+# Environment variables (contains API keys)
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Temporary test outputs
+eval_results*.txt
+inference_test*.txt
+test_output.txt
+test_results_new.txt
+error_log.txt
+final_inference.txt
+tmp.txt
+grader_sim_test.txt
+
+# IDE
+.vscode/
+.idea/

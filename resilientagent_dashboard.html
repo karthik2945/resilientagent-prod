@@ -1,0 +1,1649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResilientAgent-Prod · Mission Control</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #080c10;
+            --surface: #0d1117;
+            --surface-hover: #161b22;
+            --accent: #00ff88;
+            --accent-dim: rgba(0, 255, 136, 0.1);
+            --blue: #00b8ff;
+            --danger: #ff3b5c;
+            --warn: #ff9500;
+            --text: #e6edf3;
+            --text-dim: #8b949e;
+            --border: rgba(0, 255, 136, 0.2);
+        }
+
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated Grid Background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 136, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: rgba(13, 17, 23, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 1000;
+        }
+
+        .brand {
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .server-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.9); }
+        }
+
+        .top-bar-right {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+        }
+
+        .timer {
+            font-size: 0.9rem;
+            color: var(--accent);
+        }
+
+        .avg-score-badge {
+            background: linear-gradient(135deg, var(--accent-dim), rgba(0, 184, 255, 0.1));
+            border: 1px solid var(--accent);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        /* Main Container */
+        .container {
+            padding: 80px 24px 24px;
+            max-width: 1800px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 40px 0;
+        }
+
+        .launch-btn {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            padding: 20px 60px;
+            background: linear-gradient(135deg, var(--accent), var(--blue));
+            border: none;
+            border-radius: 12px;
+            color: var(--bg);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 40px rgba(0, 255, 136, 0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .launch-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 0 60px rgba(0, 255, 136, 0.6);
+        }
+
+        .launch-btn::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.3), transparent);
+            transform: rotate(45deg);
+            transition: all 0.6s;
+        }
+
+        .launch-btn:hover::before {
+            left: 100%;
+        }
+
+        .launch-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--bg);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 12px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Charts Row */
+        .charts-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-top: 40px;
+        }
+
+        .chart-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.05);
+        }
+
+        .chart-panel h3 {
+            font-family: 'Syne', sans-serif;
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .gauge-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 0 auto;
+        }
+
+        .gauge-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .gauge-score {
+            font-family: 'Syne', sans-serif;
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .gauge-label {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
+        /* Bar Chart Section */
+        .bar-section {
+            margin-top: 24px;
+        }
+
+        /* Middle Section */
+        .middle-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-top: 24px;
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+        }
+
+        .panel h2 {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            color: var(--accent);
+        }
+
+        /* Task Cards */
+        .task-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .task-card {
+            padding: 16px;
+            background: var(--surface-hover);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .task-card:hover {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+        }
+
+        .task-card.active {
+            border-color: var(--accent);
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
+
+        .task-info h4 {
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+        }
+
+        .task-difficulty {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .difficulty-easy { background: rgba(0, 255, 136, 0.2); color: var(--accent); }
+        .difficulty-medium { background: rgba(255, 149, 0, 0.2); color: var(--warn); }
+        .difficulty-hard { background: rgba(255, 59, 92, 0.2); color: var(--danger); }
+
+        /* Action Buttons */
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .action-btn {
+            padding: 10px;
+            font-size: 0.7rem;
+            font-family: 'JetBrains Mono', monospace;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.2);
+        }
+
+        .action-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .action-green { background: rgba(0, 255, 136, 0.2); color: var(--accent); border: 1px solid var(--accent); }
+        .action-blue { background: rgba(0, 184, 255, 0.2); color: var(--blue); border: 1px solid var(--blue); }
+        .action-yellow { background: rgba(255, 149, 0, 0.2); color: var(--warn); border: 1px solid var(--warn); }
+        .action-gray { background: rgba(139, 148, 158, 0.2); color: var(--text-dim); border: 1px solid var(--text-dim); }
+
+        .auto-sequence-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(90deg, var(--accent), var(--blue));
+            border: none;
+            border-radius: 6px;
+            color: var(--bg);
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 16px;
+        }
+
+        /* Step History */
+        .step-history {
+            max-height: 200px;
+            overflow-y: auto;
+            background: var(--bg);
+            border-radius: 6px;
+            padding: 12px;
+        }
+
+        .step-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            border-bottom: 1px solid var(--surface-hover);
+            font-size: 0.8rem;
+        }
+
+        .step-row:last-child {
+            border-bottom: none;
+        }
+
+        .reward-positive { color: var(--accent); }
+        .reward-negative { color: var(--danger); }
+
+        /* Metric Cards */
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background: var(--surface-hover);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .metric-card.alert {
+            border-color: var(--danger);
+            animation: flash-red 0.5s ease;
+        }
+
+        .metric-card.ok {
+            border-color: var(--accent);
+            animation: flash-green 0.5s ease;
+        }
+
+        @keyframes flash-red {
+            0%, 100% { box-shadow: none; }
+            50% { box-shadow: 0 0 20px rgba(255, 59, 92, 0.5); }
+        }
+
+        @keyframes flash-green {
+            0%, 100% { box-shadow: none; }
+            50% { box-shadow: 0 0 20px rgba(0, 255, 136, 0.5); }
+        }
+
+        .metric-label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+
+        .metric-value {
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+
+        .metric-value.alert { color: var(--danger); }
+        .metric-value.ok { color: var(--accent); }
+
+        /* Alert Status */
+        .alert-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .alert-critical {
+            background: rgba(255, 59, 92, 0.2);
+            color: var(--danger);
+            animation: pulse-danger 2s infinite;
+        }
+
+        .alert-healthy {
+            background: rgba(0, 255, 136, 0.2);
+            color: var(--accent);
+        }
+
+        @keyframes pulse-danger {
+            0%, 100% { box-shadow: 0 0 5px rgba(255, 59, 92, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(255, 59, 92, 0.8); }
+        }
+
+        /* Services */
+        .services-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .service-chip {
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+
+        .service-up {
+            background: rgba(0, 255, 136, 0.2);
+            color: var(--accent);
+            animation: pulse-green 2s infinite;
+        }
+
+        .service-degraded {
+            background: rgba(255, 149, 0, 0.2);
+            color: var(--warn);
+        }
+
+        .service-down {
+            background: rgba(255, 59, 92, 0.2);
+            color: var(--danger);
+        }
+
+        @keyframes pulse-green {
+            0%, 100% { box-shadow: 0 0 5px rgba(0, 255, 136, 0.3); }
+            50% { box-shadow: 0 0 15px rgba(0, 255, 136, 0.6); }
+        }
+
+        /* Terminal */
+        .terminal {
+            background: var(--bg);
+            border: 1px solid var(--surface-hover);
+            border-radius: 8px;
+            padding: 16px;
+            font-size: 0.8rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .log-normal { color: var(--text-dim); }
+        .log-error { color: var(--danger); }
+        .log-warn { color: var(--warn); }
+        .log-success { color: var(--accent); }
+
+        /* Score Breakdown */
+        .score-breakdown {
+            display: none;
+        }
+
+        .score-breakdown.visible {
+            display: block;
+        }
+
+        .score-bar-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .score-bar-label {
+            width: 120px;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        .score-bar-track {
+            flex: 1;
+            height: 20px;
+            background: var(--surface-hover);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 0 12px;
+        }
+
+        .score-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--blue));
+            border-radius: 10px;
+            transition: width 1s ease;
+            width: 0%;
+        }
+
+        .score-bar-value {
+            width: 80px;
+            font-size: 0.8rem;
+            text-align: right;
+        }
+
+        .final-score {
+            text-align: center;
+            padding: 24px;
+        }
+
+        .final-score-number {
+            font-family: 'Syne', sans-serif;
+            font-size: 4rem;
+            font-weight: 700;
+        }
+
+        .final-score-above { color: var(--accent); }
+        .final-score-below { color: var(--danger); }
+
+        /* Timeline */
+        .timeline {
+            display: flex;
+            align-items: center;
+            padding: 24px;
+            overflow-x: auto;
+        }
+
+        .timeline-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 80px;
+        }
+
+        .timeline-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-bottom: 8px;
+        }
+
+        .timeline-dot.correct { background: var(--accent); }
+        .timeline-dot.wrong { background: var(--danger); }
+
+        .timeline-line {
+            flex: 1;
+            height: 2px;
+            background: var(--surface-hover);
+            margin: 0 8px;
+            margin-bottom: 24px;
+        }
+
+        .timeline-action {
+            font-size: 0.7rem;
+            text-align: center;
+            max-width: 80px;
+        }
+
+        /* Confetti */
+        .confetti-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 9999;
+        }
+
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            animation: confetti-fall 3s ease-out forwards;
+        }
+
+        @keyframes confetti-fall {
+            0% { transform: translateY(-100px) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 16px 24px;
+            background: var(--danger);
+            color: white;
+            border-radius: 8px;
+            display: none;
+            animation: slide-in 0.3s ease;
+            z-index: 10000;
+        }
+
+        .toast.visible {
+            display: block;
+        }
+
+        @keyframes slide-in {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+
+        /* Export Button */
+        .export-btn {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            padding: 12px 20px;
+            background: var(--surface);
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            color: var(--accent);
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            z-index: 100;
+        }
+
+        .export-btn:hover {
+            background: var(--accent-dim);
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .charts-row, .middle-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .action-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .metric-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Confetti Container -->
+    <div class="confetti-container" id="confetti"></div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div class="brand">
+            <span>ResilientAgent-Prod</span>
+            <span style="color: var(--text-dim);">·</span>
+            <span style="font-weight: 400; color: var(--text-dim);">Mission Control</span>
+        </div>
+        <div class="server-status">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">Connecting...</span>
+        </div>
+        <div class="top-bar-right">
+            <div class="timer" id="episodeTimer">00:00:00</div>
+            <div class="avg-score-badge" id="avgScoreBadge">Avg: 0.000</div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Hero Section -->
+        <div class="hero">
+            <button class="launch-btn" id="launchBtn" onclick="runBaseline()">
+                🚀 Launch Full Evaluation
+                <span class="loading-spinner" id="launchSpinner"></span>
+            </button>
+            <div style="margin-top: 16px;">
+                <button class="launch-btn" id="llmBtn" onclick="runLLMInference()" style="background: linear-gradient(135deg, #a855f7, #3b82f6); box-shadow: 0 0 40px rgba(168, 85, 247, 0.4); font-size: 1.4rem; padding: 16px 48px;">
+                    🧠 Launch LLM Agent
+                    <span class="loading-spinner" id="llmSpinner"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="charts-row">
+            <div class="chart-panel">
+                <h3>Performance Radar</h3>
+                <canvas id="radarChart" width="400" height="300"></canvas>
+            </div>
+            <div class="chart-panel">
+                <h3>Average Score</h3>
+                <div class="gauge-container">
+                    <canvas id="gaugeChart" width="300" height="300"></canvas>
+                    <div class="gauge-center">
+                        <div class="gauge-score" id="gaugeScore">0.000</div>
+                        <div class="gauge-label" id="gaugeLabel">vs 0.867 baseline</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bar Chart Section -->
+        <div class="bar-section chart-panel">
+            <h3>Task Scores Comparison</h3>
+            <canvas id="barChart" height="100"></canvas>
+        </div>
+
+        <!-- Middle Section -->
+        <div class="middle-section">
+            <!-- Left: Manual Explorer -->
+            <div class="panel">
+                <h2>Manual Explorer</h2>
+                <div class="task-cards">
+                    <div class="task-card" id="task1" onclick="selectTask('task1_latency_spike')">
+                        <div class="task-info">
+                            <h4>⚡ latency_spike</h4>
+                        </div>
+                        <span class="task-difficulty difficulty-easy">Easy</span>
+                    </div>
+                    <div class="task-card" id="task2" onclick="selectTask('task2_prediction_drift')">
+                        <div class="task-info">
+                            <h4>📉 prediction_drift</h4>
+                        </div>
+                        <span class="task-difficulty difficulty-medium">Medium</span>
+                    </div>
+                    <div class="task-card" id="task3" onclick="selectTask('task3_cascading_failure')">
+                        <div class="task-info">
+                            <h4>💥 cascading_failure</h4>
+                        </div>
+                        <span class="task-difficulty difficulty-hard">Hard</span>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <input type="text" id="targetInput" placeholder="Target service" 
+                           style="width: 100%; padding: 10px; background: var(--bg); border: 1px solid var(--border); 
+                                  border-radius: 6px; color: var(--text); font-family: 'JetBrains Mono', monospace;">
+                </div>
+
+                <div class="action-grid">
+                    <button class="action-btn action-green" onclick="runAction('check_metrics')" title="Query system metrics">check_metrics</button>
+                    <button class="action-btn action-green" onclick="runAction('read_logs')" title="Read recent logs">read_logs</button>
+                    <button class="action-btn action-green" onclick="runAction('check_deployment')" title="Check deployment status">check_deployment</button>
+                    <button class="action-btn action-green" onclick="runAction('analyze_drift')" title="Analyze prediction drift">analyze_drift</button>
+                    <button class="action-btn action-blue" onclick="runAction('optimize_batch')" title="Optimize batch size">optimize_batch</button>
+                    <button class="action-btn action-blue" onclick="runAction('rollback_model')" title="Rollback model version">rollback_model</button>
+                    <button class="action-btn action-blue" onclick="runAction('restart_service')" title="Restart service">restart_service</button>
+                    <button class="action-btn action-blue" onclick="runAction('scale_service')" title="Scale service resources">scale_service</button>
+                    <button class="action-btn action-yellow" onclick="runAction('verify_fix')" title="Verify incident resolved">verify_fix</button>
+                    <button class="action-btn action-gray" onclick="runAction('notify_team')" title="Notify operations team">notify_team</button>
+                </div>
+
+                <button class="auto-sequence-btn" id="autoBtn" onclick="runAutoSequence()">
+                    ▶ Run Auto Sequence
+                </button>
+
+                <div class="step-history" id="stepHistory">
+                    <div style="color: var(--text-dim); text-align: center;">No steps yet. Select a task and run actions.</div>
+                </div>
+            </div>
+
+            <!-- Right: Live Data -->
+            <div class="panel">
+                <h2>Live Metrics</h2>
+                <div class="metric-grid" id="metricGrid">
+                    <div class="metric-card" id="metric-latency">
+                        <div class="metric-label">latency_p99</div>
+                        <div class="metric-value">-</div>
+                    </div>
+                    <div class="metric-card" id="metric-error">
+                        <div class="metric-label">error_rate</div>
+                        <div class="metric-value">-</div>
+                    </div>
+                    <div class="metric-card" id="metric-gpu">
+                        <div class="metric-label">gpu_util</div>
+                        <div class="metric-value">-</div>
+                    </div>
+                    <div class="metric-card" id="metric-throughput">
+                        <div class="metric-label">throughput</div>
+                        <div class="metric-value">-</div>
+                    </div>
+                    <div class="metric-card" id="metric-accuracy">
+                        <div class="metric-label">accuracy</div>
+                        <div class="metric-value">-</div>
+                    </div>
+                    <div class="metric-card" id="metric-cpu">
+                        <div class="metric-label">cpu_util</div>
+                        <div class="metric-value">-</div>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-bottom: 16px;">
+                    <span class="alert-badge alert-critical" id="alertStatus">CRITICAL</span>
+                </div>
+
+                <div style="background: rgba(255, 149, 0, 0.1); border: 1px solid var(--warn); border-radius: 8px; padding: 12px; text-align: center; display: none;" id="rootCauseBox">
+                    <div style="font-size: 0.7rem; color: var(--warn); margin-bottom: 4px;">ROOT CAUSE IDENTIFIED</div>
+                    <div style="font-weight: 600;" id="rootCauseText">-</div>
+                </div>
+
+                <div class="services-grid" id="servicesGrid">
+                    <!-- Services populated dynamically -->
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <canvas id="lineChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Section -->
+        <div class="middle-section" style="margin-top: 24px;">
+            <div class="panel">
+                <h2>Terminal Logs</h2>
+                <div class="terminal" id="terminal">
+                    <div class="log-entry log-normal">Ready. Waiting for task selection...</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>Score Breakdown</h2>
+                <div class="score-breakdown" id="scoreBreakdown">
+                    <div class="score-bar-row">
+                        <div class="score-bar-label">health_score</div>
+                        <div class="score-bar-track"><div class="score-bar-fill" id="bar-health" style="width: 0%"></div></div>
+                        <div class="score-bar-value" id="val-health">0.00/0.25</div>
+                    </div>
+                    <div class="score-bar-row">
+                        <div class="score-bar-label">time_score</div>
+                        <div class="score-bar-track"><div class="score-bar-fill" id="bar-time" style="width: 0%"></div></div>
+                        <div class="score-bar-value" id="val-time">0.00/0.25</div>
+                    </div>
+                    <div class="score-bar-row">
+                        <div class="score-bar-label">root_cause</div>
+                        <div class="score-bar-track"><div class="score-bar-fill" id="bar-root" style="width: 0%"></div></div>
+                        <div class="score-bar-value" id="val-root">0.00/0.15</div>
+                    </div>
+                    <div class="score-bar-row">
+                        <div class="score-bar-label">efficiency</div>
+                        <div class="score-bar-track"><div class="score-bar-fill" id="bar-efficiency" style="width: 0%"></div></div>
+                        <div class="score-bar-value" id="val-efficiency">0.00/0.15</div>
+                    </div>
+                    <div class="score-bar-row">
+                        <div class="score-bar-label">metric_score</div>
+                        <div class="score-bar-track"><div class="score-bar-fill" id="bar-metric" style="width: 0%"></div></div>
+                        <div class="score-bar-value" id="val-metric">0.00/0.20</div>
+                    </div>
+                    <div class="score-bar-row">
+                        <div class="score-bar-label">sequence</div>
+                        <div class="score-bar-track"><div class="score-bar-fill" id="bar-sequence" style="width: 0%"></div></div>
+                        <div class="score-bar-value" id="val-sequence">0.00/0.10</div>
+                    </div>
+
+                    <div class="final-score">
+                        <div class="final-score-number" id="finalScore">0.000</div>
+                        <div id="finalMessage">Run evaluation to see score</div>
+                        <button class="auto-sequence-btn" style="margin-top: 16px;" onclick="fetchGrade()">
+                            📊 POST /grader
+                        </button>
+                    </div>
+                </div>
+
+                <div id="scorePlaceholder" style="text-align: center; padding: 40px; color: var(--text-dim);">
+                    Complete a task to see detailed score breakdown
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Timeline -->
+        <div class="panel" style="margin-top: 24px;">
+            <h2>Action Timeline</h2>
+            <div class="timeline" id="timeline">
+                <div style="color: var(--text-dim); width: 100%; text-align: center;">No actions taken yet</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Button -->
+    <button class="export-btn" onclick="exportHistory()">📥 Export JSON</button>
+
+    <script>
+        // API Configuration (Relative path for Hugging Face Spaces)
+        const API_URL = '';
+        
+        // State
+        let currentTask = null;
+        let stepCount = 0;
+        let stepHistory = [];
+        let metricsHistory = { steps: [], latency: [], error: [] };
+        let charts = {};
+        let episodeStart = null;
+        let correctSequences = {
+            'task1_latency_spike': ['check_metrics', 'read_logs', 'optimize_batch', 'verify_fix'],
+            'task2_prediction_drift': ['analyze_drift', 'check_deployment', 'rollback_model', 'verify_fix'],
+            'task3_cascading_failure': ['check_metrics', 'read_logs', 'restart_service', 'scale_service', 'verify_fix']
+        };
+        let taskTargets = {
+            'task1_latency_spike': 'inference_service',
+            'task2_prediction_drift': 'ml_model',
+            'task3_cascading_failure': 'primary_model'
+        };
+
+        // Initialize Charts
+        function initCharts() {
+            // Radar Chart
+            const radarCtx = document.getElementById('radarChart').getContext('2d');
+            charts.radar = new Chart(radarCtx, {
+                type: 'radar',
+                data: {
+                    labels: ['Health', 'Time', 'RootCause', 'Efficiency', 'Metrics', 'Sequence'],
+                    datasets: [{
+                        label: 'Your Score',
+                        data: [0, 0, 0, 0, 0, 0],
+                        backgroundColor: 'rgba(0, 255, 136, 0.2)',
+                        borderColor: '#00ff88',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#00ff88'
+                    }, {
+                        label: 'Baseline',
+                        data: [0.25, 0.25, 0.15, 0.15, 0.2, 0.1],
+                        backgroundColor: 'transparent',
+                        borderColor: '#8b949e',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointBackgroundColor: '#8b949e'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: 0.3,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            pointLabels: { color: '#8b949e', font: { family: 'JetBrains Mono' } },
+                            ticks: { display: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#e6edf3', font: { family: 'JetBrains Mono' } } }
+                    }
+                }
+            });
+
+            // Gauge Chart (Doughnut)
+            const gaugeCtx = document.getElementById('gaugeChart').getContext('2d');
+            charts.gauge = new Chart(gaugeCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Score', 'Remaining'],
+                    datasets: [{
+                        data: [0, 1],
+                        backgroundColor: ['#00ff88', 'rgba(255, 255, 255, 0.1)'],
+                        borderWidth: 0,
+                        cutout: '75%'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    rotation: -90,
+                    circumference: 180,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false }
+                    }
+                }
+            });
+
+            // Bar Chart
+            const barCtx = document.getElementById('barChart').getContext('2d');
+            charts.bar = new Chart(barCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['latency_spike', 'prediction_drift', 'cascading_failure'],
+                    datasets: [{
+                        label: 'Your Score',
+                        data: [0, 0, 0],
+                        backgroundColor: '#00ff88',
+                        borderRadius: 4
+                    }, {
+                        label: 'Baseline',
+                        data: [0.8, 1.0, 0.8],
+                        backgroundColor: '#8b949e',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 1.1,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#8b949e', font: { family: 'JetBrains Mono' } }
+                        },
+                        x: {
+                            ticks: { color: '#e6edf3', font: { family: 'JetBrains Mono' } }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#e6edf3', font: { family: 'JetBrains Mono' } } }
+                    }
+                }
+            });
+
+            // Line Chart
+            const lineCtx = document.getElementById('lineChart').getContext('2d');
+            charts.line = new Chart(lineCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'latency_p99',
+                        data: [],
+                        borderColor: '#ff3b5c',
+                        backgroundColor: 'rgba(255, 59, 92, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }, {
+                        label: 'error_rate',
+                        data: [],
+                        borderColor: '#ff9500',
+                        backgroundColor: 'rgba(255, 149, 0, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: '#8b949e', font: { family: 'JetBrains Mono' } }
+                        },
+                        x: {
+                            ticks: { color: '#8b949e', font: { family: 'JetBrains Mono' } }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#e6edf3', font: { family: 'JetBrains Mono' } } }
+                    }
+                }
+            });
+        }
+
+        // Server Status Check
+        async function checkServerStatus() {
+            try {
+                const res = await fetch(`${API_URL}/tasks`, { method: 'GET' });
+                if (res.ok) {
+                    document.getElementById('statusDot').style.background = '#00ff88';
+                    document.getElementById('statusText').textContent = 'Connected';
+                    return true;
+                }
+            } catch (e) {}
+            document.getElementById('statusDot').style.background = '#ff3b5c';
+            document.getElementById('statusText').textContent = 'Disconnected';
+            return false;
+        }
+
+        // Episode Timer
+        function startTimer() {
+            episodeStart = Date.now();
+            setInterval(() => {
+                if (episodeStart) {
+                    const elapsed = Math.floor((Date.now() - episodeStart) / 1000);
+                    const hrs = Math.floor(elapsed / 3600).toString().padStart(2, '0');
+                    const mins = Math.floor((elapsed % 3600) / 60).toString().padStart(2, '0');
+                    const secs = (elapsed % 60).toString().padStart(2, '0');
+                    document.getElementById('episodeTimer').textContent = `${hrs}:${mins}:${secs}`;
+                }
+            }, 1000);
+        }
+
+        // Select Task
+        async function selectTask(taskId) {
+            currentTask = taskId;
+            stepCount = 0;
+            stepHistory = [];
+            metricsHistory = { steps: [], latency: [], error: [] };
+            
+            // Update UI
+            document.querySelectorAll('.task-card').forEach(c => c.classList.remove('active'));
+            document.getElementById(taskId === 'task1_latency_spike' ? 'task1' : 
+                                  taskId === 'task2_prediction_drift' ? 'task2' : 'task3').classList.add('active');
+            
+            document.getElementById('targetInput').value = taskTargets[taskId] || '';
+            document.getElementById('stepHistory').innerHTML = '';
+            document.getElementById('timeline').innerHTML = '<div style="color: var(--text-dim); width: 100%; text-align: center;">No actions taken yet</div>';
+            
+            // Reset line chart
+            charts.line.data.labels = [];
+            charts.line.data.datasets[0].data = [];
+            charts.line.data.datasets[1].data = [];
+            charts.line.update();
+            
+            addLog(`Selected task: ${taskId}`, 'success');
+            
+            // Call reset endpoint
+            try {
+                const res = await fetch(`${API_URL}/reset`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task_id: taskId })
+                });
+                const data = await res.json();
+                updateMetrics(data.observation.metrics);
+                updateAlertStatus(data.observation.alert_status);
+                updateRootCause(data.observation.root_cause_hint);
+                addLog('Environment reset successfully', 'success');
+                episodeStart = Date.now();
+            } catch (e) {
+                showToast('Failed to reset environment');
+            }
+        }
+
+        // Run Action
+        async function runAction(actionType) {
+            if (!currentTask) {
+                showToast('Please select a task first');
+                return;
+            }
+            
+            const target = document.getElementById('targetInput').value || taskTargets[currentTask];
+            
+            try {
+                const res = await fetch(`${API_URL}/step`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action_type: actionType, target: target, parameters: null })
+                });
+                const data = await res.json();
+                
+                stepCount++;
+                stepHistory.push({
+                    step: stepCount,
+                    action: actionType,
+                    target: target,
+                    reward: data.reward,
+                    timestamp: new Date().toLocaleTimeString()
+                });
+                
+                // Update UI
+                addStepToHistory(stepCount, actionType, target, data.reward);
+                updateMetrics(data.observation.metrics);
+                updateAlertStatus(data.observation.alert_status);
+                updateRootCause(data.observation.root_cause_hint);
+                updateTimeline(actionType, data.reward);
+                
+                // Update line chart
+                metricsHistory.steps.push(stepCount);
+                metricsHistory.latency.push(data.observation.metrics.latency_p99 || 0);
+                metricsHistory.error.push(data.observation.metrics.error_rate || 0);
+                charts.line.data.labels = metricsHistory.steps;
+                charts.line.data.datasets[0].data = metricsHistory.latency;
+                charts.line.data.datasets[1].data = metricsHistory.error;
+                charts.line.update();
+                
+                addLog(`Step ${stepCount}: ${actionType} → ${target} (reward: ${data.reward.toFixed(3)})`, 
+                       data.reward > 0 ? 'success' : 'normal');
+                
+                if (data.done) {
+                    addLog('Episode complete! Task resolved.', 'success');
+                    fetchGrade();
+                }
+            } catch (e) {
+                showToast('Action failed: ' + e.message);
+            }
+        }
+
+        // Run Auto Sequence
+        async function runAutoSequence() {
+            if (!currentTask) {
+                showToast('Please select a task first');
+                return;
+            }
+            
+            const sequence = correctSequences[currentTask];
+            const btn = document.getElementById('autoBtn');
+            btn.disabled = true;
+            
+            for (let i = 0; i < sequence.length; i++) {
+                await runAction(sequence[i]);
+                if (i < sequence.length - 1) {
+                    await new Promise(r => setTimeout(r, 800));
+                }
+            }
+            
+            btn.disabled = false;
+        }
+
+        // Run Baseline (Full Evaluation)
+        async function runBaseline() {
+            const btn = document.getElementById('launchBtn');
+            const spinner = document.getElementById('launchSpinner');
+            btn.disabled = true;
+            spinner.style.display = 'inline-block';
+            
+            try {
+                const res = await fetch(`${API_URL}/baseline`);
+                const data = await res.json();
+                
+                // Animate results appearing
+                const results = data.results;
+                const taskNames = Object.keys(results);
+                
+                // Reset bar chart
+                charts.bar.data.datasets[0].data = [0, 0, 0];
+                charts.bar.update();
+                
+                let totalScore = 0;
+                
+                for (let i = 0; i < taskNames.length; i++) {
+                    await new Promise(r => setTimeout(r, 1000));
+                    const task = taskNames[i];
+                    const score = results[task].score;
+                    totalScore += score;
+                    
+                    // Update bar chart
+                    const idx = task === 'latency_spike' ? 0 : task === 'prediction_drift' ? 1 : 2;
+                    charts.bar.data.datasets[0].data[idx] = score;
+                    charts.bar.update();
+                    
+                    addLog(`${task}: ${score.toFixed(3)}`, 'success');
+                }
+                
+                const avgScore = totalScore / taskNames.length;
+                
+                // Update gauge
+                charts.gauge.data.datasets[0].data = [avgScore, 1 - avgScore];
+                charts.gauge.update();
+                animateValue('gaugeScore', 0, avgScore, 1500);
+                
+                // Update radar with estimated component scores
+                charts.radar.data.datasets[0].data = [
+                    avgScore * 0.25, // Health
+                    avgScore * 0.25, // Time
+                    avgScore * 0.15, // RootCause
+                    avgScore * 0.15, // Efficiency
+                    avgScore * 0.20, // Metrics
+                    avgScore * 0.10  // Sequence
+                ];
+                charts.radar.update();
+                
+                document.getElementById('avgScoreBadge').textContent = `Avg: ${avgScore.toFixed(3)}`;
+                
+                // Confetti if above 0.908
+                if (avgScore > 0.908) {
+                    fireConfetti();
+                }
+                
+                // Update final score display
+                document.getElementById('finalScore').textContent = avgScore.toFixed(3);
+                document.getElementById('finalScore').className = avgScore > 0.867 ? 'final-score-number final-score-above' : 'final-score-number final-score-below';
+                document.getElementById('finalMessage').textContent = avgScore > 0.867 ? `Beat baseline by +${(avgScore - 0.867).toFixed(3)}` : `Below baseline by ${(avgScore - 0.867).toFixed(3)}`;
+                
+            } catch (e) {
+                showToast('Baseline evaluation failed: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+            }
+        }
+
+        // Run LLM Inference (calls /llm-inference)
+        async function runLLMInference() {
+            const btn = document.getElementById('llmBtn');
+            const spinner = document.getElementById('llmSpinner');
+            btn.disabled = true;
+            spinner.style.display = 'inline-block';
+            addLog('🧠 Starting LLM Agent (Groq/HuggingFace)...', 'success');
+
+            try {
+                const res = await fetch(`${API_URL}/llm-inference`);
+                const data = await res.json();
+
+                addLog(`🧠 Model: ${data.model}`, 'success');
+
+                const results = data.results;
+                const details = data.details;
+                const taskNames = Object.keys(results);
+
+                // Reset bar chart
+                charts.bar.data.datasets[0].data = [0, 0, 0];
+                charts.bar.update();
+
+                let totalScore = 0;
+
+                for (let i = 0; i < taskNames.length; i++) {
+                    const task = taskNames[i];
+                    const score = results[task].score;
+                    const steps = details[task] || [];
+                    totalScore += score;
+
+                    addLog(`\n--- ${task} ---`, 'success');
+
+                    // Animate each step with a delay
+                    for (let s = 0; s < steps.length; s++) {
+                        await new Promise(r => setTimeout(r, 500));
+                        const st = steps[s];
+                        const rewardClass = st.reward > 0 ? 'success' : 'warn';
+                        addLog(`  Step ${st.step}: ${st.action_type} → ${st.target}  (reward: ${st.reward.toFixed(3)})`, rewardClass);
+                    }
+
+                    addLog(`  ✓ Score: ${score.toFixed(4)}  |  Resolved: ${results[task].resolved}`, 'success');
+
+                    // Update bar chart
+                    const idx = task === 'latency_spike' ? 0 : task === 'prediction_drift' ? 1 : 2;
+                    charts.bar.data.datasets[0].data[idx] = score;
+                    charts.bar.update();
+
+                    await new Promise(r => setTimeout(r, 600));
+                }
+
+                const avgScore = totalScore / taskNames.length;
+
+                // Update gauge
+                charts.gauge.data.datasets[0].data = [avgScore, 1 - avgScore];
+                charts.gauge.update();
+                animateValue('gaugeScore', 0, avgScore, 1500);
+
+                // Update radar
+                charts.radar.data.datasets[0].data = [
+                    avgScore * 0.25, avgScore * 0.25, avgScore * 0.15,
+                    avgScore * 0.15, avgScore * 0.20, avgScore * 0.10
+                ];
+                charts.radar.update();
+
+                document.getElementById('avgScoreBadge').textContent = `Avg: ${avgScore.toFixed(3)}`;
+                document.getElementById('finalScore').textContent = avgScore.toFixed(3);
+                document.getElementById('finalScore').className = avgScore > 0.867 ? 'final-score-number final-score-above' : 'final-score-number final-score-below';
+                document.getElementById('finalMessage').textContent = avgScore > 0.867 ? `Beat baseline by +${(avgScore - 0.867).toFixed(3)}` : `Below baseline by ${(avgScore - 0.867).toFixed(3)}`;
+
+                addLog(`\n🧠 LLM Average Score: ${avgScore.toFixed(3)}`, 'success');
+
+                if (avgScore > 0.908) fireConfetti();
+
+            } catch (e) {
+                showToast('LLM Inference failed: ' + e.message);
+                addLog('ERROR: LLM Inference failed — ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                spinner.style.display = 'none';
+            }
+        }
+
+        // Fetch Grade
+        async function fetchGrade() {
+            try {
+                const res = await fetch(`${API_URL}/grader`, { method: 'POST' });
+                const data = await res.json();
+                
+                document.getElementById('scorePlaceholder').style.display = 'none';
+                document.getElementById('scoreBreakdown').classList.add('visible');
+                
+                // Animate bars (estimated breakdown since server returns only total)
+                const total = data.score;
+                const breakdown = {
+                    health: Math.min(0.25, total * 0.25),
+                    time: Math.min(0.25, total * 0.25),
+                    root: total > 0.5 ? 0.15 : 0,
+                    efficiency: total * 0.15,
+                    metric: Math.min(0.20, total * 0.20),
+                    sequence: total * 0.10
+                };
+                
+                updateScoreBar('health', breakdown.health, 0.25);
+                updateScoreBar('time', breakdown.time, 0.25);
+                updateScoreBar('root', breakdown.root, 0.15);
+                updateScoreBar('efficiency', breakdown.efficiency, 0.15);
+                updateScoreBar('metric', breakdown.metric, 0.20);
+                updateScoreBar('sequence', breakdown.sequence, 0.10);
+                
+                document.getElementById('finalScore').textContent = total.toFixed(3);
+                document.getElementById('finalScore').className = total > 0.867 ? 'final-score-number final-score-above' : 'final-score-number final-score-below';
+                document.getElementById('finalMessage').textContent = total > 0.867 ? `Beat baseline by +${(total - 0.867).toFixed(3)}` : `Below baseline by ${(total - 0.867).toFixed(3)}`;
+                
+            } catch (e) {
+                showToast('Failed to fetch grade: ' + e.message);
+            }
+        }
+
+        // Update Score Bar
+        function updateScoreBar(name, value, max) {
+            const pct = (value / max) * 100;
+            document.getElementById(`bar-${name}`).style.width = `${pct}%`;
+            document.getElementById(`val-${name}`).textContent = `${value.toFixed(2)}/${max.toFixed(2)}`;
+        }
+
+        // Update Metrics Display
+        function updateMetrics(metrics) {
+            const updateMetric = (id, val, threshold, isMax = true) => {
+                const card = document.getElementById(`metric-${id}`);
+                const valueEl = card.querySelector('.metric-value');
+                const oldVal = valueEl.textContent;
+                valueEl.textContent = val !== undefined ? val.toFixed(2) : '-';
+                
+                // Flash animation if changed
+                if (oldVal !== valueEl.textContent && oldVal !== '-') {
+                    card.classList.add(isMax && val > threshold ? 'alert' : 'ok');
+                    setTimeout(() => card.classList.remove('alert', 'ok'), 500);
+                }
+                
+                if (isMax && val > threshold) {
+                    valueEl.classList.add('alert');
+                    valueEl.classList.remove('ok');
+                } else if (!isMax && val < threshold) {
+                    valueEl.classList.add('alert');
+                    valueEl.classList.remove('ok');
+                } else {
+                    valueEl.classList.remove('alert');
+                    valueEl.classList.add('ok');
+                }
+            };
+            
+            updateMetric('latency', metrics.latency_p99, 1500);
+            updateMetric('error', metrics.error_rate, 0.10);
+            updateMetric('gpu', metrics.gpu_util, 0.90);
+            updateMetric('throughput', metrics.throughput, Infinity, false);
+            updateMetric('accuracy', metrics.accuracy, 0.85, false);
+            updateMetric('cpu', metrics.cpu_util, 0.90);
+        }
+
+        // Update Alert Status
+        function updateAlertStatus(status) {
+            const badge = document.getElementById('alertStatus');
+            if (status === 'healthy') {
+                badge.textContent = 'HEALTHY';
+                badge.className = 'alert-badge alert-healthy';
+            } else {
+                badge.textContent = 'CRITICAL';
+                badge.className = 'alert-badge alert-critical';
+            }
+        }
+
+        // Update Root Cause
+        function updateRootCause(hint) {
+            const box = document.getElementById('rootCauseBox');
+            if (hint) {
+                document.getElementById('rootCauseText').textContent = hint;
+                box.style.display = 'block';
+            } else {
+                box.style.display = 'none';
+            }
+        }
+
+        // Update Timeline
+        function updateTimeline(action, reward) {
+            const timeline = document.getElementById('timeline');
+            if (stepCount === 1) {
+                timeline.innerHTML = '';
+            }
+            
+            const node = document.createElement('div');
+            node.className = 'timeline-node';
+            node.innerHTML = `
+                <div class="timeline-dot ${reward > 0 ? 'correct' : 'wrong'}"></div>
+                <div class="timeline-action">${action}<br>${reward > 0 ? '+' : ''}${reward.toFixed(2)}</div>
+            `;
+            
+            if (stepCount > 1) {
+                const line = document.createElement('div');
+                line.className = 'timeline-line';
+                timeline.appendChild(line);
+            }
+            
+            timeline.appendChild(node);
+            timeline.scrollLeft = timeline.scrollWidth;
+        }
+
+        // Add Step to History
+        function addStepToHistory(step, action, target, reward) {
+            const history = document.getElementById('stepHistory');
+            if (step === 1) {
+                history.innerHTML = '';
+            }
+            
+            const row = document.createElement('div');
+            row.className = 'step-row';
+            row.innerHTML = `
+                <span>Step ${step}: ${action} → ${target}</span>
+                <span class="${reward > 0 ? 'reward-positive' : 'reward-negative'}">${reward > 0 ? '+' : ''}${reward.toFixed(3)}</span>
+            `;
+            history.appendChild(row);
+            history.scrollTop = history.scrollHeight;
+        }
+
+        // Add Log Entry
+        function addLog(message, type = 'normal') {
+            const terminal = document.getElementById('terminal');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            terminal.appendChild(entry);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        // Show Toast
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('visible');
+            setTimeout(() => toast.classList.remove('visible'), 3000);
+        }
+
+        // Fire Confetti
+        function fireConfetti() {
+            const container = document.getElementById('confetti');
+            const colors = ['#00ff88', '#00b8ff', '#ff9500', '#ff3b5c'];
+            
+            for (let i = 0; i < 100; i++) {
+                const conf = document.createElement('div');
+                conf.className = 'confetti';
+                conf.style.left = Math.random() * 100 + '%';
+                conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                conf.style.animationDelay = Math.random() * 2 + 's';
+                container.appendChild(conf);
+            }
+            
+            setTimeout(() => container.innerHTML = '', 3000);
+        }
+
+        // Animate Value
+        function animateValue(id, start, end, duration) {
+            const el = document.getElementById(id);
+            const startTime = performance.now();
+            
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const current = start + (end - start) * progress;
+                el.textContent = current.toFixed(3);
+                
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+            
+            requestAnimationFrame(update);
+        }
+
+        // Export History
+        function exportHistory() {
+            const data = {
+                timestamp: new Date().toISOString(),
+                task: currentTask,
+                steps: stepHistory,
+                metrics: metricsHistory
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `resilientagent-session-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '1') selectTask('task1_latency_spike');
+            if (e.key === '2') selectTask('task2_prediction_drift');
+            if (e.key === '3') selectTask('task3_cascading_failure');
+            if (e.key === 'a' || e.key === 'A') runAutoSequence();
+            if (e.key === 'r' || e.key === 'R') {
+                if (currentTask) selectTask(currentTask);
+            }
+        });
+
+        // Initialize
+        window.addEventListener('load', () => {
+            initCharts();
+            checkServerStatus();
+            setInterval(checkServerStatus, 5000);
+            startTimer();
+            addLog('Dashboard initialized. Ready for mission control.', 'success');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autonomous SRE Platform: Real-Time Self-Healing</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --glass-bg: rgba(30, 41, 59, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --primary: #3b82f6;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at top right, #1e1b4b, var(--bg-dark), #020617);
+            color: var(--text-main);
+            margin: 0;
+            padding: 2rem;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .badge {
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+        
+        .badge.critical {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+            border-color: var(--danger);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+            flex: 1;
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-title {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+            margin-bottom: 1.5rem;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        .metric-card {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--glass-border);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 1.75rem;
+            font-weight: 800;
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-label {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .log-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            overflow-y: auto;
+            max-height: 600px;
+            padding-right: 0.5rem;
+        }
+
+        .log-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .log-container::-webkit-scrollbar-thumb {
+            background: var(--glass-border);
+            border-radius: 3px;
+        }
+
+        .log-entry {
+            background: rgba(0, 0, 0, 0.2);
+            border-left: 4px solid var(--primary);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            animation: slideIn 0.3s ease-out;
+            font-size: 0.9rem;
+        }
+
+        .log-entry.human {
+            border-left-color: var(--danger);
+        }
+
+        .log-entry.incident {
+            border-left-color: var(--warning);
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-family: monospace;
+            color: var(--text-muted);
+        }
+
+        .log-action {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .log-reason {
+            color: var(--text-main);
+            line-height: 1.4;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .dashboard-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div>
+            <h1 class="header-title">Autonomous SRE Platform</h1>
+            <p style="color: var(--text-muted); margin: 0.25rem 0 1rem 0; font-size: 1.1rem;">PyTorch Deep Q-Network resolving production ML incidents in real-time.</p>
+            <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); padding: 1rem; border-radius: 0.5rem; max-width: 800px; font-size: 0.95rem; line-height: 1.5;">
+                <strong style="color: var(--primary);">What is this?</strong> This is a live mathematical simulation of a production ML infrastructure failure (like a GPU memory leak or cascading traffic timeout). <br><br>The AI Agent is a custom Deep Q-Network that autonomously monitors the live graph below. When it detects an anomaly, it calculates the optimal remediation strategy and executes code to heal the server without human intervention. Watch the <strong>Live Decision Trace</strong> to see its exact reasoning!
+            </div>
+        </div>
+        <div id="statusBadge" class="badge">SYSTEM HEALTHY</div>
+    </div>
+
+    <div class="dashboard-grid">
+        <!-- Main Simulation Panel -->
+        <div class="glass-panel">
+            <h2 class="panel-title">
+                Continuous Infrastructure Simulation 
+                <span id="taskName" style="color:var(--text-muted); font-size:1rem; font-weight:400;">Awaiting tasks...</span>
+            </h2>
+            
+            <div class="chart-container">
+                <canvas id="metricsChart"></canvas>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div id="valLatency" class="metric-value">--</div>
+                    <div class="metric-label">P99 Latency (ms)</div>
+                </div>
+                <div class="metric-card">
+                    <div id="valQueue" class="metric-value">--</div>
+                    <div class="metric-label">Request Queue</div>
+                </div>
+                <div class="metric-card">
+                    <div id="valError" class="metric-value">--</div>
+                    <div class="metric-label">Error Rate</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Explanation Layer -->
+        <div class="glass-panel">
+            <h2 class="panel-title">
+                Live Decision Trace
+                <div class="spinner" style="width: 12px; height: 12px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 10px var(--primary); animation: pulse 1.5s infinite;"></div>
+            </h2>
+            <div id="logContainer" class="log-container">
+                <div class="log-entry" style="border-left-color: var(--success);">
+                    <div class="log-header"><span>SYSTEM</span></div>
+                    <div class="log-reason">Dashboard connected. Waiting for agent telemetry...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Setup Chart.js
+        const ctx = document.getElementById('metricsChart').getContext('2d');
+        
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+
+        const metricsChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'P99 Latency (ms)',
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y',
+                        data: []
+                    },
+                    {
+                        label: 'GPU Memory / Load',
+                        borderColor: '#8b5cf6',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        tension: 0.4,
+                        yAxisID: 'y1',
+                        data: []
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                    },
+                    y: {
+                        position: 'left',
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                    },
+                    y1: {
+                        position: 'right',
+                        beginAtZero: true,
+                        max: 1.0,
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // Add CSS keyframes for the pulse
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+                70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+                100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+            }
+        `;
+        document.head.appendChild(style);
+
+        let maxDataPoints = 30;
+        let lastLogCount = 0;
+        let episodeStep = 0;
+
+        async function fetchState() {
+            try {
+                // Fetch server state
+                const res = await fetch('/ui_state');
+                const data = await res.json();
+                
+                if (data && data.metrics) {
+                    episodeStep++;
+                    const m = data.metrics;
+                    
+                    // Update header
+                    if (data.current_task) {
+                        document.getElementById('taskName').innerText = `[${data.current_task.split('_').slice(1).join(' ').toUpperCase()}]`;
+                    }
+                    
+                    const badge = document.getElementById('statusBadge');
+                    if (data.alert_status === 'critical') {
+                        badge.className = 'badge critical';
+                        badge.innerText = 'CRITICAL INCIDENT';
+                    } else {
+                        badge.className = 'badge';
+                        badge.innerText = 'SYSTEM HEALTHY';
+                    }
+
+                    // Update number cards
+                    const lat = m.latency_p99 || m.primary_model_latency_p99 || 0;
+                    document.getElementById('valLatency').innerText = lat.toFixed(0);
+                    document.getElementById('valQueue').innerText = (m.queue_depth || 0).toFixed(1);
+                    document.getElementById('valError').innerText = ((m.error_rate || 0) * 100).toFixed(1) + '%';
+
+                    // Update Chart
+                    if (metricsChart.data.labels.length > maxDataPoints) {
+                        metricsChart.data.labels.shift();
+                        metricsChart.data.datasets.forEach(d => d.data.shift());
+                    }
+                    metricsChart.data.labels.push(`t+${episodeStep}s`);
+                    metricsChart.data.datasets[0].data.push(lat);
+                    metricsChart.data.datasets[1].data.push(m.gpu_util || m.memory_util || 0.5);
+                    metricsChart.update();
+                }
+
+                // Fetch AI Logs
+                const logRes = await fetch('/ui_logs');
+                const logData = await logRes.json();
+                
+                if (logData.logs.length > lastLogCount || (logData.logs.length === 0 && lastLogCount > 0)) {
+                    if (logData.logs.length === 0) {
+                        // Environment reset
+                        episodeStep = 0;
+                        metricsChart.data.labels = [];
+                        metricsChart.data.datasets.forEach(d => d.data = []);
+                        document.getElementById('logContainer').innerHTML = '';
+                    } else {
+                        // Append new logs
+                        const newLogs = logData.logs.slice(lastLogCount);
+                        const container = document.getElementById('logContainer');
+                        
+                        newLogs.forEach(entry => {
+                            const div = document.createElement('div');
+                            let colorType = "human"; // default
+                            if (entry.role === 'agent') colorType = "agent";
+                            if (entry.role === 'system') colorType = "incident";
+                            
+                            div.className = `log-entry ${colorType}`;
+                            
+                            let actionHtml = '';
+                            if (entry.action && entry.action.action_type) {
+                                actionHtml = `<div class="log-action">⚡ ${entry.action.action_type.toUpperCase()} ➔ ${entry.action.target}</div>`;
+                            }
+                            
+                            div.innerHTML = `
+                                <div class="log-header"><span>${entry.role.toUpperCase()}</span> <span>${new Date().toLocaleTimeString()}</span></div>
+                                ${actionHtml}
+                                <div class="log-reason">${entry.reasoning}</div>
+                            `;
+                            // Prepend instead of append to show latest at top
+                            container.insertBefore(div, container.firstChild);
+                        });
+                    }
+                    lastLogCount = logData.logs.length;
+                }
+
+            } catch(e) {
+                console.error("Polling failed", e);
+            }
+        }
+
+        // Poll every 1 second
+        setInterval(fetchState, 1000);
+    </script>
+</body>
+</html>

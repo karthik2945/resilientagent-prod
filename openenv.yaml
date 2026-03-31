@@ -1,0 +1,25 @@
+name: resilientagent-prod
+version: 1.0.0
+description: "OpenEnv environment for ML model production incident response"
+tags: [openenv, mlops, incident-response, pytorch]
+tasks:
+  - id: task1_latency_spike
+    difficulty: easy
+    description: "Diagnose and fix ML model latency spike"
+  - id: task2_prediction_drift
+    difficulty: medium
+    description: "Detect and remediate model prediction drift"
+  - id: task3_cascading_failure
+    difficulty: hard
+    description: "Resolve cascading ML service failure"
+api:
+  reset: POST /reset
+  step: POST /step
+  state: GET /state
+  grader: POST /grader
+  tasks: GET /tasks
+  baseline: GET /baseline
+baseline_scores:
+  task1_latency_spike: 0.80
+  task2_prediction_drift: 1.00
+  task3_cascading_failure: 0.80
