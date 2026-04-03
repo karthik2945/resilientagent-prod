@@ -31,15 +31,18 @@ load_dotenv()
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME   = os.getenv("MODEL_NAME", "gpt-4")
 HF_TOKEN     = os.getenv("HF_TOKEN")
+OPENAI_API   = os.getenv("OPENAI_API_KEY")
+
+api_key = HF_TOKEN if HF_TOKEN else OPENAI_API
 
 # Initialize OpenAI client
-if not HF_TOKEN or HF_TOKEN.strip() == "":
-    print("ERROR: HF_TOKEN environment variable not set!", file=sys.stderr)
-    print("Evaluator must inject: API_BASE_URL, MODEL_NAME, HF_TOKEN", file=sys.stderr)
+if not api_key or api_key.strip() == "":
+    print("ERROR: Neither HF_TOKEN nor OPENAI_API_KEY environment variable is set!", file=sys.stderr)
+    print("Evaluator must inject: API_BASE_URL, MODEL_NAME, and an API Key", file=sys.stderr)
     sys.exit(1)
 
 try:
-    client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+    client = OpenAI(base_url=API_BASE_URL, api_key=api_key)
 except Exception as e:
     print(f"ERROR: Failed to initialize OpenAI client: {e}", file=sys.stderr)
     sys.exit(1)
