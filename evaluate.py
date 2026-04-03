@@ -59,7 +59,7 @@ def run_task(env, task_id):
         steps += 1
 
         if obs.done:
-            print(f"  ✓ Task resolved!")
+            print(f"  [OK] Task resolved!")
             break
 
     # Get final grade
@@ -125,8 +125,8 @@ def main():
     for task, result in results.items():
         baseline = baseline_scores.get(task, 0)
         diff = result['score'] - baseline
-        status = "↑" if diff > 0 else "↓" if diff < 0 else "="
-        print(f"  {task}: {result['score']:.3f} vs {baseline:.3f} baseline ({status}{abs(diff):.3f})")
+        status = "UP" if diff > 0 else "DOWN" if diff < 0 else "SAME"
+        print(f"  {task}: {result['score']:.3f} vs {baseline:.3f} baseline ({status} {abs(diff):.3f})")
 
 
 if __name__ == "__main__":

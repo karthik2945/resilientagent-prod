@@ -1,0 +1,20 @@
+# Exclude test and log files from HF Spaces
+*.txt
+*.log
+error_log.txt
+eval_results_utf8.txt
+eval_results.txt
+test_output.txt
+test_results_new.txt
+inference_test_utf8.txt
+inference_test.txt
+final_inference.txt
+grader_sim_test.txt
+tmp.txt
+.git/
+__pycache__/
+*.pyc
+.env
+*.pt
+training_results.json
+baseline/

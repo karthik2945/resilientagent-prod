@@ -55,6 +55,7 @@ class ResilientAgentEnvironment(Environment):
 
     def __init__(self):
         """Initialize the ResilientAgent environment."""
+        super().__init__()
         self._state = State(episode_id=str(uuid4()), step_count=0)
         self.task_id: Optional[str] = None
         self.incident_start: Optional[float] = None
@@ -74,12 +75,15 @@ class ResilientAgentEnvironment(Environment):
         self._fix_applied: Optional[str] = None
         self._time_to_resolution: Optional[float] = None
 
-    def reset(self, task_id: str = "task1_latency_spike") -> ResilientAgentObservation:
+    def reset(self, seed: Optional[int] = None, episode_id: Optional[str] = None, task_id: str = "task1_latency_spike", **kwargs) -> ResilientAgentObservation:
         """
         Reset the environment for a new task.
 
         Args:
+            seed: Optional random seed (OpenEnv base class compatibility)
+            episode_id: Optional episode ID override (OpenEnv base class compatibility)
             task_id: Task identifier (e.g., "task1_latency_spike")
+            **kwargs: Additional keyword arguments for forward compatibility
 
         Returns:
             ResilientAgentObservation with initial system state
@@ -469,3 +473,19 @@ class ResilientAgentEnvironment(Environment):
     def state(self) -> State:
         """Get the current environment state."""
         return self._state
+
+    def get_state(self) -> dict:
+        """Get the current environment state as a dictionary.
+
+        Used by the /state API endpoint.
+        """
+        return {
+            "episode_id": self._state.episode_id,
+            "step_count": self._state.step_count,
+            "task_id": self.task_id,
+            "model_healthy": self._model_healthy,
+            "actions_taken": self._actions_taken,
+            "metrics": dict(self._metrics),
+            "alert_status": "healthy" if self._model_healthy else "critical",
+        }
+

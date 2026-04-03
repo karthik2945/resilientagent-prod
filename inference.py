@@ -3,20 +3,22 @@
 inference.py — LLM-powered SRE Agent for ResilientAgent-Prod.
 
 Uses the OpenAI-compatible API (Groq / HuggingFace / etc.) to diagnose and
-resolve ML production incidents.  Reads API_BASE_URL, MODEL_NAME, HF_TOKEN
+resolve ML production incidents. Reads API_BASE_URL, MODEL_NAME, HF_TOKEN
 from the environment (hackathon grader injects these automatically).
+
+Outputs structured logs in [START] [STEP] [END] format for hackathon evaluation.
 """
 
 import os
 import sys
 import json
-import logging
+from typing import Optional, List
 
 # Ensure local imports work
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
 
 from server.resilientagent_prod_environment import ResilientAgentEnvironment
 from models import ResilientAgentAction
@@ -30,10 +32,17 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
 MODEL_NAME   = os.getenv("MODEL_NAME", "gpt-4")
 HF_TOKEN     = os.getenv("HF_TOKEN")
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logger = logging.getLogger("inference")
+# Initialize OpenAI client
+if not HF_TOKEN or HF_TOKEN.strip() == "":
+    print("ERROR: HF_TOKEN environment variable not set!", file=sys.stderr)
+    print("Evaluator must inject: API_BASE_URL, MODEL_NAME, HF_TOKEN", file=sys.stderr)
+    sys.exit(1)
 
-client = openai.OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+try:
+    client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+except Exception as e:
+    print(f"ERROR: Failed to initialize OpenAI client: {e}", file=sys.stderr)
+    sys.exit(1)
 
 # ---------------------------------------------------------------------------
 # System prompt — gives the LLM full context about the environment
@@ -83,8 +92,8 @@ def build_user_prompt(task_id: str, obs, history: list[dict]) -> str:
     )
 
 
-def get_llm_action(task_id: str, obs, history: list[dict]) -> dict:
-    """Ask the LLM for the next action."""
+def get_llm_action(task_id: str, obs, history: list[dict]) -> tuple[dict, Optional[str]]:
+    """Ask the LLM for the next action. Returns (action_dict, error_string or None)."""
     prompt = build_user_prompt(task_id, obs, history)
 
     try:
@@ -104,65 +113,115 @@ def get_llm_action(task_id: str, obs, history: list[dict]) -> dict:
             reply = reply.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
         action_dict = json.loads(reply)
-        return action_dict
+        return action_dict, None
 
     except Exception as e:
-        logger.error(f"LLM call failed: {e}")
-        return {"action_type": "notify_team", "target": "inference_service"}
+        error_msg = str(e)
+        # Return fallback action with error
+        return {"action_type": "notify_team", "target": "inference_service"}, error_msg
+
+# ---------------------------------------------------------------------------
+# Structured logging functions (hackathon format)
+# ---------------------------------------------------------------------------
+def log_start(task: str, env_name: str, model: str) -> None:
+    """Log START with task, env, model."""
+    print(f"[START] task={task} env={env_name} model={model}", flush=True)
+
+
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    """Log STEP with step number, action, reward, done flag, error."""
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
+        flush=True,
+    )
+
+
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    """Log END with success, steps, final score, reward list."""
+    success_val = str(success).lower()
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(
+        f"[END] success={success_val} steps={steps} score={score:.3f} rewards={rewards_str}",
+        flush=True,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Main inference loop
 # ---------------------------------------------------------------------------
 def run_inference():
-    logger.info(f"Starting inference — model={MODEL_NAME}  base_url={API_BASE_URL}")
+    """Run all tasks and output structured logs."""
     env = ResilientAgentEnvironment()
 
     tasks = ["task1_latency_spike", "task2_prediction_drift", "task3_cascading_failure"]
-    results = {}
+    all_results = {}
 
     for task_id in tasks:
-        logger.info(f"\n--- {task_id} ---")
+        task_short = task_id.split("_", 1)[1] if "_" in task_id else task_id
+        env_name = "resilientagent-prod"
+        
+        # Reset environment
         obs = env.reset(task_id=task_id)
-
+        
+        # Log start
+        log_start(task_short, env_name, MODEL_NAME)
+        
         history: list[dict] = []
+        step_rewards: List[float] = []
         max_steps = 10
+        last_error = None
 
+        # Run steps
         while len(history) < max_steps and not obs.done:
-            action_dict = get_llm_action(task_id, obs, history)
-
+            step_num = len(history) + 1
+            
+            # Get LLM action
+            action_dict, llm_error = get_llm_action(task_id, obs, history)
+            
             action_type = action_dict.get("action_type", "check_metrics")
-            target      = action_dict.get("target", "inference_service")
-
-            logger.info(f"Step {len(history)+1} | {action_type} -> {target}")
-
+            target = action_dict.get("target", "inference_service")
+            
+            # Format action as string
+            action_str = f"{action_type}('{target}')"
+            
+            # Execute action
             action = ResilientAgentAction(action_type=action_type, target=target)
             obs = env.step(action)
-
+            
+            # Record step
+            step_rewards.append(obs.reward)
+            last_error = llm_error
+            
+            log_step(step_num, action_str, obs.reward, obs.done, llm_error)
+            
             history.append({
                 "action_type": action_type,
                 "target": target,
                 "reward": obs.reward,
             })
-
+            
             if obs.done:
-                logger.info("Task resolved!")
                 break
-
+        
+        # Grade task
         score = env.grade()
-        short = task_id.split("_", 1)[1]
-        results[short] = {"score": round(score, 4), "steps": len(history), "resolved": env._model_healthy}
-        logger.info(f"Score: {score:.4f}")
-
-    # --- Print final JSON for the grader ---
-    output = {"model": MODEL_NAME, "results": results}
-    print("\n" + "=" * 50)
-    print("FINAL INFERENCE RESULTS")
-    print("=" * 50)
-    print(json.dumps(output, indent=2))
-    return output
+        success = env._model_healthy
+        
+        log_end(success, len(history), score, step_rewards)
+        
+        all_results[task_short] = {
+            "score": round(score, 4),
+            "steps": len(history),
+            "resolved": success,
+            "rewards": [round(r, 2) for r in step_rewards]
+        }
+    
+    return all_results
 
 
 if __name__ == "__main__":
     if not HF_TOKEN:
-        logger.warning("HF_TOKEN not set — API calls will likely fail.")
+        print("WARNING: HF_TOKEN not set — API calls will likely fail.", file=sys.stderr)
     run_inference()
