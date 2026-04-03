@@ -1341,8 +1341,12 @@
             try {
                 const res = await fetch(`${API_URL}/llm-inference`);
                 const data = await res.json();
+                
+                if (!res.ok) {
+                    throw new Error(data.detail || "Server error occurred");
+                }
 
-                addLog(`🧠 Model: ${data.model}`, 'success');
+                addLog(`🧠 Model: ${data.model || 'Unknown'}`, 'success');
 
                 const results = data.results;
                 const details = data.details;
