@@ -251,18 +251,22 @@ def get_llm_action(client, model: str, task_id: str, obs, history: list) -> dict
 
 @app.get("/llm-inference")
 def llm_inference():
-    """Run REAL LLM agent on all tasks using Groq API."""
-    # Check for API key
-    api_key = os.environ.get("HF_TOKEN") or os.environ.get("GROQ_API_KEY")
+    """Run REAL LLM agent on all tasks using API."""
+    # Read evaluator environment variables
+    api_base_url = os.environ.get("API_BASE_URL", "https://api.openai.com/v1")
+    model_name = os.environ.get("MODEL_NAME", "gpt-4")
+    
+    # Check for API key (Handles HF_TOKEN, OPENAI_API_KEY or GROQ_API_KEY)
+    api_key = os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY") or os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=400,
-            detail="No API key found. Set HF_TOKEN or GROQ_API_KEY environment variable."
+            detail="No API key found. Set HF_TOKEN or OPENAI_API_KEY environment variable."
         )
     
-    # Initialize Groq client
+    # Initialize OpenAI-compatible client
     client = OpenAI(
-        base_url="https://api.groq.com/openai/v1",
+        base_url=api_base_url,
         api_key=api_key
     )
     
@@ -285,7 +289,7 @@ def llm_inference():
         
         for step_num in range(max_steps):
             # Use STRONG prompt from inference.py
-            action_dict = get_llm_action(client, "llama-3.3-70b-versatile", task_id, obs, history)
+            action_dict = get_llm_action(client, model_name, task_id, obs, history)
             
             action_type = action_dict.get("action_type", "check_metrics")
             target = action_dict.get("target", "inference_service")
