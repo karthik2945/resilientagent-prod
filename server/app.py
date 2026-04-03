@@ -16,6 +16,10 @@ from resilientagent_prod_environment import ResilientAgentEnvironment
 from models import ResilientAgentAction, ResilientAgentObservation
 from openai import OpenAI
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI(title="ResilientAgent-Prod Environment")
 
