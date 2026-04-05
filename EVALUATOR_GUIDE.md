@@ -248,10 +248,15 @@ With a proper LLM API (no rate limits), you should see:
 
 | Task | Score | Resolution |
 |---|---|---|
-| latency_spike | 0.90-0.95 | ✓ RESOLVED |
-| prediction_drift | 0.95-1.00 | ✓ RESOLVED |
-| cascading_failure | 0.90-0.96 | ✓ RESOLVED |
-| **Average** | **~0.95** | **3/3 resolved** |
+| latency_spike | 0.905 | ✓ RESOLVED |
+| prediction_drift | 1.000 | ✓ RESOLVED |
+| cascading_failure | 0.960 | ✓ RESOLVED |
+| **Average** | **0.955** | **3/3 resolved** |
+
+**Verified Performance:**
+- latency_spike: 3 steps (check_metrics → read_logs → optimize_batch)
+- prediction_drift: 4 steps (analyze_drift → check_deployment → rollback_model → verify_fix)
+- cascading_failure: 5 steps (check_metrics → read_logs → restart_service → scale_service → verify_fix)
 
 ---
 

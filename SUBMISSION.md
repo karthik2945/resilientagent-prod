@@ -53,6 +53,12 @@ Baseline Performance (Pre-submission):
 ├─ task2_prediction_drift:   1.000 ✓ (vs 1.00 baseline: =0.000)
 ├─ cascading_failure:        0.960 ✓ (vs 0.80 baseline: +0.160)
 └─ Average:                  0.955 ✓ (Exceeds expectation)
+
+LLM Agent Performance (Actual):
+├─ latency_spike:            0.905 ✓ (3 steps, resolved)
+├─ prediction_drift:         1.000 ✓ (4 steps, resolved)
+├─ cascading_failure:        0.960 ✓ (5 steps, resolved)
+└─ Average:                  0.955 ✓ (3/3 tasks resolved)
 ```
 
 Run locally: `python evaluate.py`

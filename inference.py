@@ -64,12 +64,34 @@ inference_service, ml_model, primary_model, fallback_model
 ## Critical rules
 1. NEVER repeat the same (action, target) pair you already used.
 2. Follow this general pattern: diagnose first → apply a fix → verify_fix.
-3. Task-specific guidance:
-   • latency_spike  → check_metrics → read_logs → optimize_batch → verify_fix  (target: inference_service)
-   • prediction_drift → analyze_drift → check_deployment → rollback_model → verify_fix  (target: ml_model)
-   • cascading_failure → check_metrics(primary_model) → read_logs(primary_model) → restart_service(primary_model) → scale_service(fallback_model) → verify_fix(primary_model)
-4. Reply ONLY with a JSON object:  {"action_type": "...", "target": "..."}
+3. Reply ONLY with a JSON object:  {"action_type": "...", "target": "..."}
    No markdown fences, no extra text.
+
+## Task-Specific Guidance
+
+### Latency Spike (latency_p99 > 1000ms, gpu_memory_exhaustion in logs)
+CORRECT SEQUENCE: check_metrics → read_logs → optimize_batch(inference_service) → verify_fix
+- The fix is optimize_batch to reduce GPU memory pressure
+- Target: inference_service
+
+### Prediction Drift (accuracy < 0.8, drift_score > 0.5, schema mismatch in logs)
+CORRECT SEQUENCE: analyze_drift(ml_model) → check_deployment(ml_model) → rollback_model(ml_model) → verify_fix
+- Root cause: data_pipeline_schema_change
+- The fix is rollback_model to previous version
+- Target: ml_model (NOT inference_service)
+
+### Cascading Failure (primary_model down, fallback_model degraded, OOM in logs)
+CORRECT SEQUENCE: check_metrics → read_logs → restart_service(primary_model) → scale_service(fallback_model) → verify_fix
+- First fix: restart_service on primary_model (to recover from OOM)
+- Second fix: scale_service on fallback_model (to handle load)
+- Targets: primary_model and fallback_model (NOT inference_service)
+
+## Action Meanings
+- analyze_drift: Check for model/data drift issues
+- rollback_model: Revert to previous model version (use for schema/pipeline issues)
+- optimize_batch: Reduce batch size to fix GPU memory issues
+- restart_service: Restart crashed/dead service (use for OOM/memory leaks)
+- scale_service: Add capacity to handle load (use for degraded/high-load services)
 """
 
 

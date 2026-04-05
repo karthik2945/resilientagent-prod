@@ -85,6 +85,17 @@ The environment uses a strict, multi-factor grading system designed to prevent r
 Random agents average score: **~0.0**  
 Optimal agents average score: **~0.95**
 
+## Verified LLM Performance
+
+Tested with `llama-3.3-70b-versatile` (Groq):
+
+| Task | Score | Steps | Status |
+|------|-------|-------|--------|
+| latency_spike | **0.905** | 3 | ✅ Resolved |
+| prediction_drift | **1.000** | 4 | ✅ Resolved |
+| cascading_failure | **0.960** | 5 | ✅ Resolved |
+| **Average** | **0.955** | - | **3/3 Resolved** |
+
 ## Setup
 
 ```bash

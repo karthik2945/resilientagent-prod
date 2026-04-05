@@ -60,7 +60,7 @@ inference_service, ml_model, primary_model, fallback_model
 
 
 class ResetRequest(BaseModel):
-    task_id: str
+    task_id: str = "task1_latency_spike"
 
 
 class StepRequest(BaseModel):
