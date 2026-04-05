@@ -92,10 +92,11 @@ def build_user_prompt(task_id: str, obs, history: list) -> str:
 
 
 @app.post("/reset")
-def reset(request: ResetRequest):
+def reset(request: Optional[ResetRequest] = None):
     """Reset environment for a new task."""
     env = get_env()
-    obs = env.reset(task_id=request.task_id)
+    task_id = request.task_id if request else "task1_latency_spike"
+    obs = env.reset(task_id=task_id)
     return {
         "observation": {
             "metrics": obs.metrics,
