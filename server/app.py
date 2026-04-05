@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -8,7 +8,6 @@ import logging
 import sys
 from pathlib import Path
 
-# Add parent directory and server directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -18,24 +17,19 @@ from openai import OpenAI
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
 app = FastAPI(title="ResilientAgent-Prod Environment")
 
-# Global environment instance
 _env: Optional[ResilientAgentEnvironment] = None
 logger = logging.getLogger("app")
 
-
 def get_env() -> ResilientAgentEnvironment:
-    """Get or create the global environment instance."""
     global _env
     if _env is None:
         _env = ResilientAgentEnvironment()
     return _env
 
-# Strong system prompt (same as inference.py)
 SYSTEM_PROMPT = """\
 You are an autonomous SRE agent that diagnoses and resolves ML production incidents.
 
@@ -51,48 +45,23 @@ inference_service, ml_model, primary_model, fallback_model
 1. NEVER repeat the same (action, target) pair you already used.
 2. Follow this general pattern: diagnose first → apply a fix → verify_fix.
 3. Task-specific guidance:
-   • latency_spike  → check_metrics → read_logs → optimize_batch → verify_fix  (target: inference_service)
-   • prediction_drift → analyze_drift → check_deployment → rollback_model → verify_fix  (target: ml_model)
-   • cascading_failure → check_metrics(primary_model) → read_logs(primary_model) → restart_service(primary_model) → scale_service(fallback_model) → verify_fix(primary_model)
+   - latency_spike  → check_metrics → read_logs → optimize_batch → verify_fix  (target: inference_service)
+   - prediction_drift → analyze_drift → check_deployment → rollback_model → verify_fix  (target: ml_model)
+   - cascading_failure → check_metrics(primary_model) → read_logs(primary_model) → restart_service(primary_model) → scale_service(fallback_model) → verify_fix(primary_model)
 4. Reply ONLY with a JSON object:  {"action_type": "...", "target": "..."}
    No markdown fences, no extra text.
 """
 
-
 class ResetRequest(BaseModel):
     task_id: str = "task1_latency_spike"
-
 
 class StepRequest(BaseModel):
     action_type: str
     target: str
     parameters: Optional[Dict[str, Any]] = None
 
-
-def build_user_prompt(task_id: str, obs, history: list) -> str:
-    """Build a rich user prompt with observation + history (same as inference.py)."""
-    obs_summary = {
-        "task_id": task_id,
-        "alert_status": obs.alert_status,
-        "metrics": obs.metrics,
-        "recent_logs": obs.recent_logs[:3],
-    }
-
-    history_str = ""
-    if history:
-        history_str = "\n\nActions already taken (DO NOT repeat these):\n"
-        for i, h in enumerate(history, 1):
-            history_str += f"  {i}. {h['action_type']} -> {h['target']}  (reward={h['reward']:.3f})\n"
-
-    return (
-        f"Current observation:\n{json.dumps(obs_summary, indent=2)}"
-        f"{history_str}"
-        f"\n\nWhat is your next action?"
-    )
-
-
 @app.post("/reset")
-def reset(request: Optional[ResetRequest] = None):
+def reset(request: ResetRequest = Body(default=None)):
     """Reset environment for a new task."""
     env = get_env()
     task_id = request.task_id if request else "task1_latency_spike"
@@ -109,7 +78,6 @@ def reset(request: Optional[ResetRequest] = None):
             "reward": obs.reward
         }
     }
-
 
 @app.post("/step")
 def step(request: StepRequest):
@@ -136,13 +104,11 @@ def step(request: StepRequest):
         "done": obs.done
     }
 
-
 @app.get("/state")
 def state():
     """Get current environment state."""
     env = get_env()
     return {"state": env.get_state()}
-
 
 @app.post("/grader")
 def grader():
@@ -150,7 +116,6 @@ def grader():
     env = get_env()
     score = env.grade()
     return {"score": score}
-
 
 @app.get("/tasks")
 def tasks():
@@ -162,7 +127,6 @@ def tasks():
             {"id": "task3_cascading_failure", "name": "Cascading Failure", "description": "Resolve cascading ML service failure"}
         ]
     }
-
 
 @app.get("/baseline")
 def baseline():
@@ -225,7 +189,6 @@ def baseline():
     
     return {"results": results, "details": all_details}
 
-
 def get_llm_action(client, model: str, task_id: str, obs, history: list) -> dict:
     """Ask the LLM for the next action using strong prompt."""
     prompt = build_user_prompt(task_id, obs, history)
@@ -242,7 +205,6 @@ def get_llm_action(client, model: str, task_id: str, obs, history: list) -> dict
         )
         reply = response.choices[0].message.content.strip()
 
-        # Strip markdown fences if the model wraps them
         if reply.startswith("```"):
             reply = reply.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
@@ -253,15 +215,12 @@ def get_llm_action(client, model: str, task_id: str, obs, history: list) -> dict
         logger.error(f"LLM call failed: {e}")
         return {"action_type": "notify_team", "target": "inference_service"}
 
-
 @app.get("/llm-inference")
 def llm_inference():
     """Run REAL LLM agent on all tasks using API."""
-    # Read evaluator environment variables
     api_base_url = os.environ.get("API_BASE_URL", "https://api.openai.com/v1")
     model_name = os.environ.get("MODEL_NAME", "gpt-4")
     
-    # Check for API key (Handles HF_TOKEN, OPENAI_API_KEY or GROQ_API_KEY)
     api_key = os.environ.get("HF_TOKEN") or os.environ.get("OPENAI_API_KEY") or os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise HTTPException(
@@ -269,7 +228,6 @@ def llm_inference():
             detail="No API key found. Set HF_TOKEN or OPENAI_API_KEY environment variable."
         )
     
-    # Initialize OpenAI-compatible client
     client = OpenAI(
         base_url=api_base_url,
         api_key=api_key
@@ -293,7 +251,6 @@ def llm_inference():
         max_steps = 10
         
         for step_num in range(max_steps):
-            # Use STRONG prompt from inference.py
             action_dict = get_llm_action(client, model_name, task_id, obs, history)
             
             action_type = action_dict.get("action_type", "check_metrics")
@@ -335,14 +292,33 @@ def llm_inference():
         "details": all_details
     }
 
-
 @app.get("/")
 def root():
     """Serve the interactive dashboard UI."""
     return FileResponse("resilientagent_dashboard.html")
 
-
 @app.get("/health")
 def health():
     """Health check endpoint for Docker/Hugging Face Spaces."""
     return {"status": "ok"}
+
+def build_user_prompt(task_id: str, obs, history: list) -> str:
+    """Build a rich user prompt with observation + history (same as inference.py)."""
+    obs_summary = {
+        "task_id": task_id,
+        "alert_status": obs.alert_status,
+        "metrics": obs.metrics,
+        "recent_logs": obs.recent_logs[:3],
+    }
+
+    history_str = ""
+    if history:
+        history_str = "\n\nActions already taken (DO NOT repeat these):\n"
+        for i, h in enumerate(history, 1):
+            history_str += f"  {i}. {h['action_type']} -> {h['target']}  (reward={h['reward']:.3f})\n"
+
+    return (
+        f"Current observation:\n{json.dumps(obs_summary, indent=2)}"
+        f"{history_str}"
+        f"\n\nWhat is your next action?"
+    )
